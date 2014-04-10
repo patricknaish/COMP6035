@@ -3,17 +3,20 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.AbstractMap;
 import java.util.HashSet;
 import java.util.Stack;
 
 import org.aspectj.lang.Signature;
 import org.aspectj.lang.reflect.MethodSignature;
 
-public aspect RefinedGraphAspect {	
+
+public aspect ProfilingAspect {
+
 	static {
 		try {
-			if (Files.exists(new File("graphrefined.csv").toPath())) {
-				Files.delete(new File("graphrefined.csv").toPath());
+			if (Files.exists(new File("profile.csv").toPath())) {
+				Files.delete(new File("profile.csv").toPath());
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -21,7 +24,7 @@ public aspect RefinedGraphAspect {
 
 		Runtime.getRuntime().addShutdownHook(new Thread() {
 			public void run() {
-				try(FileWriter writer = new FileWriter("graphrefined.csv", true)) {
+				try(FileWriter writer = new FileWriter("profile.csv", true)) {
 					for (String s: callSet) {
 						writer.append(s+"\n");										
 					}
@@ -33,23 +36,16 @@ public aspect RefinedGraphAspect {
 
 	}
 
-	pointcut graph(): execution(@Graph * *.*(..));
+	pointcut graph(): execution(@Perf * *.*(..));
 
-	pointcut exception(): call(Exception.new(..)) && withincode(@Graph * *.*(..));
-
-	private static Stack<MethodSignature> methodStack = new Stack<>();
+	private static Stack<AbstractMap.SimpleEntry<MethodSignature, Long>> methodStack = new Stack<>();
 	private static HashSet<String> callSet = new HashSet<>();
-
-	before(): exception() {
-		popMethod();
-	}
 
 	before(): graph() {
 		pushMethod(thisJoinPointStaticPart.getSignature());
 	}
 
 	after(): graph() {
-		writeCall();
 		popMethod();
 	}
 
@@ -57,20 +53,23 @@ public aspect RefinedGraphAspect {
 		if (methodStack.size() < 2) {
 			return;
 		} else {
-			MethodSignature callerSignature = methodStack.get(methodStack.size() - 2);
-			MethodSignature targetSignature = methodStack.peek();
+			MethodSignature callerSignature = methodStack.get(methodStack.size() - 2).getKey();
+			MethodSignature targetSignature = methodStack.peek().getKey();
 			callSet.add(callerSignature.getName()+","+targetSignature.getName());
 		}
 	}
 
+	static void startTimer(Signature s) {
+		
+	}
+	
 	static void pushMethod(Signature s) {
-		methodStack.push((MethodSignature)s);
+		methodStack.push(new AbstractMap.SimpleEntry<MethodSignature, Long>((MethodSignature)s,System.currentTimeMillis()));
 	}
 
 	static void popMethod() {
-		if (methodStack.size() > 0) {
-			methodStack.pop();
-		}
+		Long stopTime = System.currentTimeMillis();
+		AbstractMap.SimpleEntry<MethodSignature, Long> entry = methodStack.pop();
 	}
 
 }

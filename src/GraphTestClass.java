@@ -1,4 +1,4 @@
-public class TestClass {
+public class GraphTestClass {
 
 	@Graph
 	public void foo(String s, String l) throws Exception {
@@ -20,6 +20,6 @@ public class TestClass {
 
 	@Graph
 	public static void main(String[] args) throws Exception {
-		new TestClass().foo("s", "l");
+		new GraphTestClass().foo("s", "l");
 	}
 }
