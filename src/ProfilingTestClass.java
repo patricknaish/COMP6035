@@ -29,6 +29,16 @@ public class ProfilingTestClass {
 			Integer timeout = Math.abs(new Random().nextInt() % 1000);
 			System.out.println("baz() timeout is " + timeout);
 			Thread.sleep(timeout);
+			bat();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
+
+	@Perf
+	public void bat() {
+		try {
+			Thread.sleep(100);
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}

@@ -20,6 +20,7 @@ public aspect ProfilingAspect {
 
 	private static Stack<AbstractMap.SimpleEntry<MethodSignature, Long>> methodStack = new Stack<>();
 	private static HashMap<MethodSignature, AbstractMap.SimpleEntry<Integer, Long>> perfMap = new HashMap<>();
+	private static HashMap<Integer,Long> timeOffset = new HashMap<>();
 	
 	/* Static setup */
 	static {
@@ -57,45 +58,85 @@ public aspect ProfilingAspect {
 	/* Pointcut to match all methods annotated with @Perf */
 	pointcut graph(): execution(@Perf * *.*(..));
 	
+	/* Before execution of the method, push it onto the stack */
 	before(): graph() {
-		while (methodStack.size() > 0) {
-			popMethod();
-		}
 		pushMethod(thisJoinPointStaticPart.getSignature());
 	}
 
+	/* After execution of the method, pop it off the stack */
 	after(): graph() {
 		popMethod();
 	}
 	
+	/* Push the method signature onto the stack, along with the current time at the start of execution */
 	static void pushMethod(Signature s) {
 		methodStack.push(new AbstractMap.SimpleEntry<MethodSignature, Long>((MethodSignature)s,System.currentTimeMillis()));
 	}
 
+	/* Pop the method from the stack, as well as handling timing */
 	static void popMethod() {
+		
+		/* Immediately get the time at the end of execution, to get the most accurate results */
+		Long stopTime = System.currentTimeMillis();
+		
+		/* If there's nothing on the stack to pop, stop */
 		if (methodStack.size() == 0) {
 			return;
 		}
 		
-		Long stopTime = System.currentTimeMillis();
+		/* 
+		 * Get the offsets for the current and next layer in the stack 
+		 * These offsets contain the execution times for the layers, so
+		 * as the stack unwinds, the execution time for a given layer
+		 * is subtracted from the one above, giving the execution time 
+		 * for that layer alone.                                       
+		 */
+		Long currentOffset = timeOffset.get(methodStack.size());
+		Long nextOffset = timeOffset.get(methodStack.size()+1);
 		
+		/* If we're reaching this layer for the first time, store a 0 for offset */
+		if (currentOffset == null) {
+			timeOffset.put(methodStack.size(), 0L);
+			currentOffset = 0L;
+		}
+		
+		/* If the next layer down has an offset value... */
+		if (nextOffset != null) {
+			/* Subtract that from the current stop time (so that we have the execution time for the current method only) */
+			stopTime -= nextOffset;
+			/* Store 0 into the next layer down, as we've already accounted for it */
+			timeOffset.put(methodStack.size()+1, 0L);
+			/* Add the offset from the next layer down into the current layer, so the layer above can take it into account */
+			timeOffset.put(methodStack.size(), currentOffset + nextOffset);
+		}
+		
+		/* Get the current method off the stack */
 		AbstractMap.SimpleEntry<MethodSignature, Long> entry = methodStack.pop();
 		MethodSignature signature = entry.getKey();
 		
-		Long startTime = entry.getValue(), timeTaken = stopTime - startTime;
+		/* Calculate the time taken for the current method's execution */
+		Long startTime = entry.getValue(), timeTaken = (stopTime - startTime);
 		
+		/* If there isn't currently an entry in the hashmap for this method signature... */
 		if (perfMap.get(signature) == null) {
+			/* Create a new one, with a single execution and the time taken for this run */
 			perfMap.put(signature, new AbstractMap.SimpleEntry<Integer, Long>(1,timeTaken));
-			System.out.println(signature.getName()+": "+timeTaken);
 		} else {
+			/* Otherwise, get the execution count and current average time */
 			AbstractMap.SimpleEntry<Integer, Long> methodPerformance = perfMap.get(signature);
 			Integer runCount = methodPerformance.getKey();
 			Long avgTime = methodPerformance.getValue();
+			/* Adjust the average to account for the new run, and increment the run counter */
 			avgTime *= runCount++;
 			avgTime += timeTaken;
 			avgTime /= runCount;
+			/* Store the new run count and average time in the hashmap */
 			perfMap.put(signature, new AbstractMap.SimpleEntry<Integer, Long>(runCount,avgTime));
 		}
+		
+		/* Add the current method's runtime to the offset for the current stack layer */
+		timeOffset.put(methodStack.size()+1, currentOffset+timeTaken);
+		
 	}
 
 }
