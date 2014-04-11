@@ -1,8 +1,15 @@
+import java.util.Random;
+
 public class ProfilingTestClass {
 
 	@Perf
-	public void foo() {
+	public void foo(String l, String x) {
 		bar();
+		try {
+			Thread.sleep(1000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
 	}
 
 	public void bar() {
@@ -12,19 +19,23 @@ public class ProfilingTestClass {
 			e.printStackTrace();
 		}
 		baz();
+		baz();
+		baz();
 	}
 
 	@Perf
 	public void baz() {
 		try {
-			Thread.sleep(1000);
+			Integer timeout = Math.abs(new Random().nextInt() % 1000);
+			System.out.println("baz() timeout is " + timeout);
+			Thread.sleep(timeout);
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
 	}
 
 	public static void main(String[] args) throws Exception {
-		new ProfilingTestClass().foo();
+		new ProfilingTestClass().foo("l", "x");
 	}
 
 }
